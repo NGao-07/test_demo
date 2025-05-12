@@ -1,16 +1,16 @@
 // my-app/app/game/page.tsx
-"use client"; // 标记为客户端组件，因为有交互和 localStorage
+"use client";
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import styles from './Game.module.css'; // 我们将创建这个 CSS 模块
+import styles from './Game.module.css';
 
-const GAME_WIDTH = 600; // 游戏区域宽度
-const GAME_HEIGHT = 400; // 游戏区域高度
+const GAME_WIDTH = 600;
+const GAME_HEIGHT = 400;
 const PADDLE_WIDTH = 100;
 const PADDLE_HEIGHT = 20;
 const OBJECT_SIZE = 30;
-const OBJECT_FALL_SPEED = 4; // 物体下落速度
-const OBJECT_SPAWN_INTERVAL = 200; // 物体生成间隔 (ms)
+const OBJECT_FALL_SPEED = 4;
+const OBJECT_SPAWN_INTERVAL = 500;
 
 interface GameObject {
   id: number;
@@ -19,59 +19,82 @@ interface GameObject {
 }
 
 export default function GamePage() {
+  const [playerName, setPlayerName] = useState('');
+  const [isNameSubmitted, setIsNameSubmitted] = useState(false);
   const [paddleX, setPaddleX] = useState(GAME_WIDTH / 2 - PADDLE_WIDTH / 2);
   const [objects, setObjects] = useState<GameObject[]>([]);
   const [score, setScore] = useState(0);
-  const [highScore, setHighScore] = useState(0);
+  const [localHighScore, setLocalHighScore] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isGameOver, setIsGameOver] = useState(false);
+  const [feedbackMessage, setFeedbackMessage] = useState('');
 
   const gameAreaRef = useRef<HTMLDivElement>(null);
-  const requestRef = useRef<number>(); // 用于 requestAnimationFrame
+  const requestRef = useRef<number>();
   const lastObjectSpawnTimeRef = useRef<number>(0);
 
-  // 加载最高分
   useEffect(() => {
-    const storedHighScore = localStorage.getItem('fallingObjectsHighScore');
+    const storedHighScore = localStorage.getItem('fallingObjectsLocalHighScore');
     if (storedHighScore) {
-      setHighScore(parseInt(storedHighScore, 10));
+      setLocalHighScore(parseInt(storedHighScore, 10));
     }
   }, []);
 
-  // 游戏主循环
-  const gameLoop = useCallback((timestamp: number) => {
+  const saveScoreToDB = async (name: string, finalScore: number) => {
+    try {
+      const response = await fetch('/api/save-score', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ playerName: name, score: finalScore }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        console.error('Failed to save score:', data.error, data.details);
+        setFeedbackMessage(`Error saving score: ${data.details || data.error}`);
+      } else {
+        console.log('Score saved:', data.message);
+        setFeedbackMessage('Score saved to database!');
+      }
+    } catch (error) {
+      console.error('Network error saving score:', error);
+      setFeedbackMessage('Network error. Could not save score.');
+    }
+  };
+
+  const gameLoop = useCallback(async (timestamp: number) => {
     if (!isPlaying) return;
 
-    // 1. 移动物体
     setObjects(prevObjects =>
       prevObjects
         .map(obj => ({ ...obj, y: obj.y + OBJECT_FALL_SPEED }))
         .filter(obj => {
-          // 2. 碰撞检测
           if (
-            obj.y + OBJECT_SIZE >= GAME_HEIGHT - PADDLE_HEIGHT && // 物体底部接触或超过挡板顶部
-            obj.y < GAME_HEIGHT - PADDLE_HEIGHT + OBJECT_FALL_SPEED && // 确保物体上一帧还在挡板之上
+            obj.y + OBJECT_SIZE >= GAME_HEIGHT - PADDLE_HEIGHT &&
+            obj.y < GAME_HEIGHT - PADDLE_HEIGHT + OBJECT_FALL_SPEED &&
             obj.x + OBJECT_SIZE > paddleX &&
             obj.x < paddleX + PADDLE_WIDTH
           ) {
             setScore(s => s + 1);
-            return false; // 物体被接住，移除
+            return false;
           }
-          // 3. 物体掉落到底部
           if (obj.y > GAME_HEIGHT) {
             setIsPlaying(false);
             setIsGameOver(true);
-            if (score > highScore) {
-              setHighScore(score);
-              localStorage.setItem('fallingObjectsHighScore', score.toString());
+            if (playerName.trim()) { // Ensure playerName is not just whitespace
+              saveScoreToDB(playerName, score);
             }
-            return false; // 物体掉落，移除
+            if (score > localHighScore) {
+              setLocalHighScore(score);
+              localStorage.setItem('fallingObjectsLocalHighScore', score.toString());
+            }
+            return false;
           }
-          return true; // 保留物体
+          return true;
         })
     );
 
-    // 4. 生成新物体
     if (timestamp - lastObjectSpawnTimeRef.current > OBJECT_SPAWN_INTERVAL) {
       lastObjectSpawnTimeRef.current = timestamp;
       const newObject: GameObject = {
@@ -83,12 +106,11 @@ export default function GamePage() {
     }
 
     requestRef.current = requestAnimationFrame(gameLoop);
-  }, [isPlaying, paddleX, score, highScore]); // 添加依赖
+  }, [isPlaying, paddleX, score, localHighScore, playerName]);
 
-  // 启动和停止游戏循环
   useEffect(() => {
     if (isPlaying) {
-      lastObjectSpawnTimeRef.current = performance.now(); // 重置生成计时器
+      lastObjectSpawnTimeRef.current = performance.now();
       requestRef.current = requestAnimationFrame(gameLoop);
     } else {
       if (requestRef.current) {
@@ -102,19 +124,17 @@ export default function GamePage() {
     };
   }, [isPlaying, gameLoop]);
 
-  // 鼠标控制挡板
   useEffect(() => {
     const handleMouseMove = (event: MouseEvent) => {
       if (!gameAreaRef.current || !isPlaying) return;
       const rect = gameAreaRef.current.getBoundingClientRect();
       let newPaddleX = event.clientX - rect.left - PADDLE_WIDTH / 2;
-      // 限制挡板在游戏区域内
       newPaddleX = Math.max(0, Math.min(newPaddleX, GAME_WIDTH - PADDLE_WIDTH));
       setPaddleX(newPaddleX);
     };
 
-    const gameAreaElement = gameAreaRef.current; // 捕获当前 ref 值
-    if (gameAreaElement) {
+    const gameAreaElement = gameAreaRef.current;
+    if (gameAreaElement && isPlaying) {
         gameAreaElement.addEventListener('mousemove', handleMouseMove);
     }
 
@@ -123,30 +143,98 @@ export default function GamePage() {
             gameAreaElement.removeEventListener('mousemove', handleMouseMove);
         }
     };
-  }, [isPlaying]); // 只在 isPlaying 变化时重新绑定或解绑
+  }, [isPlaying]);
 
-  const startGame = () => {
+  const initializeAndStartGame = () => {
     setScore(0);
     setObjects([]);
     setPaddleX(GAME_WIDTH / 2 - PADDLE_WIDTH / 2);
-    setIsPlaying(true);
     setIsGameOver(false);
+    setFeedbackMessage('');
+    setIsPlaying(true);
   };
+
+  const handleNameSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmedPlayerName = playerName.trim();
+    if (trimmedPlayerName === '') {
+      setFeedbackMessage('Please enter your name.');
+      return;
+    }
+    setPlayerName(trimmedPlayerName); // Store the trimmed name
+    setIsNameSubmitted(true);
+    initializeAndStartGame();
+  };
+
+  const restartGameWithSamePlayer = () => {
+    if (!isNameSubmitted || playerName.trim() === '') {
+        setFeedbackMessage('Error: Player name not set for restart.');
+        return;
+    }
+    initializeAndStartGame();
+  };
+
+  const resetGameForNewPlayer = () => {
+    setIsPlaying(false);
+    setIsGameOver(false);
+    setIsNameSubmitted(false);
+    setPlayerName('');
+    setScore(0);
+    setObjects([]);
+    setFeedbackMessage('');
+  };
+
+  if (!isNameSubmitted) {
+    return (
+      <div className={styles.container}>
+        <h1>Enter Your Name</h1>
+        <form onSubmit={handleNameSubmit} className={styles.nameForm}>
+          <input
+            type="text"
+            value={playerName}
+            onChange={(e) => setPlayerName(e.target.value)}
+            placeholder="Enter your name"
+            className={styles.nameInput}
+            maxLength={50}
+          />
+          <button type="submit" className={styles.startButton}>
+            Set Name & Start Game
+          </button>
+        </form>
+        {feedbackMessage && <p className={styles.feedbackMessage} style={{ color: 'red' }}>{feedbackMessage}</p>}
+      </div>
+    );
+  }
 
   return (
     <div className={styles.container}>
-      <h1>接住掉落物几次就喜欢林瑞瑞几次</h1>
+      <h1>接住掉落物就喜欢林瑞瑞一次!</h1>
       <div className={styles.scoreBoard}>
-        喜欢次数: {score} | 最高喜欢次数: {highScore}
+        Player: {playerName} | 喜欢次数: {score} | 最高喜欢: {localHighScore}
       </div>
 
-      {!isPlaying && (
-        <button onClick={startGame} className={styles.startButton}>
-          {isGameOver ? '重新喜欢' : '开始喜欢'}
-        </button>
+      {!isPlaying && isGameOver && (
+        <div style={{ marginTop: '20px', marginBottom: '20px' }}>
+         <button onClick={restartGameWithSamePlayer} className={styles.startButton}>
+            玩同样的名字再来一次
+         </button>
+         <button onClick={resetGameForNewPlayer} className={styles.startButton} style={{marginLeft: '10px', backgroundColor: '#f0ad4e'}}>
+            换个名字玩
+         </button>
+        </div>
       )}
 
-      {isGameOver && <p className={styles.gameOverText}>喜欢结束!</p>}
+      {isGameOver && <p className={styles.gameOverText}>游戏结束!</p>}
+      {/* Feedback message for game screen (e.g., score saved, errors) */}
+      {/* Show this feedback only if not on the initial name entry screen and there's a message */}
+      {feedbackMessage && (
+          <p 
+            className={styles.feedbackMessage} 
+            style={{ color: feedbackMessage.toLowerCase().includes('error') || feedbackMessage.toLowerCase().includes('failed') ? 'red' : 'green' }}
+          >
+            {feedbackMessage}
+          </p>
+        )}
 
       <div
         ref={gameAreaRef}
@@ -155,7 +243,6 @@ export default function GamePage() {
       >
         {isPlaying && (
           <>
-            {/* 挡板 */}
             <div
               className={styles.paddle}
               style={{
@@ -164,7 +251,6 @@ export default function GamePage() {
                 height: PADDLE_HEIGHT,
               }}
             />
-            {/* 掉落物 */}
             {objects.map(obj => (
               <div
                 key={obj.id}

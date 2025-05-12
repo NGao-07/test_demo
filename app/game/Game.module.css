@@ -54,3 +54,39 @@
   background-color: #dc3545; // 红色方块
   */
 }
+.nameForm {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.nameInput {
+  padding: 10px;
+  font-size: 1em;
+  margin-bottom: 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: 250px;
+  text-align: center;
+}
+
+.feedbackMessage {
+  margin-top: 10px;
+  font-weight: bold;
+}
+
+/* You might want to adjust the startButton if it's reused */
+.startButton {
+  padding: 10px 20px;
+  font-size: 1.2em;
+  cursor: pointer;
+  margin-bottom: 20px; /* Or remove if .nameForm handles spacing */
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 5px;
+}
+.startButton:hover {
+    background-color: #45a049;
+}

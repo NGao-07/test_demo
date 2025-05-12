@@ -1,0 +1,56 @@
+/* my-app/app/game/Game.module.css */
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: sans-serif;
+}
+
+.scoreBoard {
+  font-size: 1.5em;
+  margin-bottom: 20px;
+}
+
+.startButton {
+  padding: 10px 20px;
+  font-size: 1.2em;
+  cursor: pointer;
+  margin-bottom: 20px;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 5px;
+}
+.startButton:hover {
+    background-color: #45a049;
+}
+
+.gameOverText {
+    color: red;
+    font-size: 1.5em;
+    font-weight: bold;
+}
+
+.gameArea {
+  position: relative; /* 重要，用于子元素的绝对定位 */
+  border: 2px solid #333;
+  background-color: #f0f0f0;
+  overflow: hidden; /* 防止物体在区域外显示 */
+  cursor: none; /* 玩游戏时隐藏鼠标指针 */
+}
+
+.paddle {
+  position: absolute;
+  bottom: 0;
+  background-color: #007bff;
+  border-radius: 3px;
+}
+
+.object {
+  position: absolute;
+  background-color: #ffc107; /* 黄色物体 */
+  border-radius: 50%; /* 圆形物体 */
+  /* 或者用方形：
+  background-color: #dc3545; // 红色方块
+  */
+}

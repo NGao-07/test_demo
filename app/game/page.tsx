@@ -30,7 +30,7 @@ export default function GamePage() {
   const [feedbackMessage, setFeedbackMessage] = useState('');
 
   const gameAreaRef = useRef<HTMLDivElement>(null);
-  const requestRef = useRef<number>();
+  const requestRef = useRef<number>(0);
   const lastObjectSpawnTimeRef = useRef<number>(0);
 
   useEffect(() => {
